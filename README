@@ -3,3 +3,30 @@ This is basically a fork of the rubyforge ruby-radius project at http://rubyforg
 I am working to make this library more easily used for radius daemons, and specifically for telecom cdr accounting.  The primary difference will be modification to read a dictionary from a database rather than flat file.
 
 The radiusd.rb requires the eventmachine gem, and is a simple implementation of a radius server the just echo's avp's as they come in.
+
+To make db usage transparent, I have put in the framework for using active record outside of rails.  There is a Rakefile included that can be used for managing db migrations.
+
+Database Usage
+-----
+To create a new database migration run:
+
+rake db:new_migration name=FooBarMigration
+edit migrations/20081220234130_foo_bar_migration.rb
+
+To apply your newest migration
+
+rake db:migrate
+
+To migrate to a specific version (for example to rollback)
+
+rake db:migrate VERSION=20081220234130
+
+To migrate a specific database (for example your "testing" database)
+
+rake db:migrate RAILS_ENV=test
+
+Credit
+------
+The standalone active record framework is based on Lincoln Stoll's blog post: http://lstoll.net/2008/04/stand-alone-activerecord-migrations/
+and David Welton's post http://journal.dedasys.com/2007/01/28/using-migrations-outside-of-rails
+
