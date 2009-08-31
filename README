@@ -1,0 +1,5 @@
+This is basically a fork of the rubyforge ruby-radius project at http://rubyforge.org/projects/ruby-radius/
+
+I am working to make this library more easily used for radius daemons, and specifically for telecom cdr accounting.  The primary difference will be modification to read a dictionary from a database rather than flat file.
+
+The radiusd.rb requires the eventmachine gem, and is a simple implementation of a radius server the just echo's avp's as they come in.
