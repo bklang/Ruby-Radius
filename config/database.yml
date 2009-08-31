@@ -6,7 +6,7 @@ development:
   database: radius
   username: radius
   password: r@dius
-  host: 65.200.189.95
+  host: 1.2.3.4
 
 #development:
 #  adapter: sqlite3
