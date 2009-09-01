@@ -4,9 +4,9 @@ development:
   adapter: mysql
   encoding: utf8
   database: radius
-  username: radius
-  password: r@dius
-  host: 1.2.3.4
+  username: root
+  password: ******
+  host: 127.0.0.1
 
 #development:
 #  adapter: sqlite3
