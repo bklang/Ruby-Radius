@@ -2,15 +2,16 @@
 require 'rubygems'
 require 'eventmachine'
 require 'lib/packet'
+require 'lib/dictionary'
  
 class RadiusServer < EM::Connection
  
  def receive_data(data)
-	dict = Radius::Dict.new
+	dict = Radius::RadiusDictionary.new
 	File.open("./dictionary") do | fn | dict.read(fn) end
  	radiusPacket = Radius::Packet.new(dict)
 	radiusPacket.unpack(data)
-  puts	radiusPacket.to_s("")
+  puts	radiusPacket.to_s()
  end
 end
  
