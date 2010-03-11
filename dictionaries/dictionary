@@ -64,7 +64,7 @@ ATTRIBUTE	Acct-Session-Time	46	integer
 ATTRIBUTE	Acct-Terminate-Cause	49	integer
 ATTRIBUTE	NAS-Port-Type		61	integer
 ATTRIBUTE	Port-Limit		62	integer
-
+ATTRIBUTE Tunnel-Client-Endpoint 66 integer
 
 #
 #	Integer Translations
