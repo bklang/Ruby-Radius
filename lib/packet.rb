@@ -53,6 +53,8 @@ module Radius
 
       @code, @identifier, @length, @authenticator, attribute_data = data.unpack(p_hdr)
       @code = rcodes[@code]
+  #  This should obviously not be hardcoded
+      @secret="imgradius"
 
       while (attribute_data.length > 0)
         # read the length of the packet data
@@ -118,12 +120,18 @@ module Radius
 #        puts "#{attribute_name}: #{value}"
     end
 
+    def get_accounting_response_packet
+       hdrlen = 1 + 1 + 2 + 16 # size of packet header
+       p_hdr = "CCna16a*" # pack template for header
+       attributes=""
+       packet=[5, @identifier, attributes.length + hdrlen,get_response_authenticator, attributes].pack(p_hdr)
+    end
+
     def get_response_authenticator
        hdrlen = 1 + 1 + 2 + 16 # size of packet header
        p_hdr = "CCna16a*" # pack template for header
        attributes=""
-       secret="blah"
-       hash_data=[5, @identifier, attributes.length + hdrlen,@authenticator, attributes,secret].pack(p_hdr)
+       hash_data=[5, @identifier, attributes.length + hdrlen,@authenticator, attributes,@secret].pack(p_hdr)
        digest = Digest::MD5.digest(hash_data)
     end
 
