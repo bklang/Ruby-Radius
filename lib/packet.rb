@@ -118,12 +118,22 @@ module Radius
 #        puts "#{attribute_name}: #{value}"
     end
 
+    def get_response_authenticator
+       hdrlen = 1 + 1 + 2 + 16 # size of packet header
+       p_hdr = "CCna16a*" # pack template for header
+       attributes=""
+       secret="blah"
+       hash_data=[5, @identifier, attributes.length + hdrlen,@authenticator, attributes,secret].pack(p_hdr)
+       digest = Digest::MD5.hexdigest(hash_data)
+    end
+
     def to_s
       content=""
       content+="Code: #{@code}\n"
       content+="Identifier: #{@identifier}\n"
       content+="Length: #{@length}\n"
-      content+="Authenticator: #{@authenticator}\n"
+      content+="Request Authenticator: #{@authenticator}\n"
+      content+="Response Authenticator: #{get_response_authenticator()}"
       @attributes.each_pair do |attribute,value|
          content+="#{attribute}: #{value}\n"
       end
