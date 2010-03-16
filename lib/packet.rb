@@ -124,7 +124,7 @@ module Radius
        attributes=""
        secret="blah"
        hash_data=[5, @identifier, attributes.length + hdrlen,@authenticator, attributes,secret].pack(p_hdr)
-       digest = Digest::MD5.hexdigest(hash_data)
+       digest = Digest::MD5.digest(hash_data)
     end
 
     def to_s
