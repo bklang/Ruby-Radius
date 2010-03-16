@@ -1,7 +1,9 @@
-This is basically a fork of the rubyforge ruby-radius project at http://rubyforge.org/projects/ruby-radius/
+This is a hack and slash rework of Rafael R. Sevilla's ruby-radius project.
 
-I am working to make this library more easily used for radius daemons, and specifically for telecom cdr accounting. 
+I am basically turning this into a Radius Accounting Server that will allow storage of dictionaries and user's shared secrets in a database.
 
-The radiusd.rb requires the eventmachine gem, and is a simple implementation of a radius server the just echo's avp's as they come in.
+Right now radiusd.rb can decode Accounting Request packets using flat file dictionaries, and it generates and sends Accounting Response packets.
 
-I have gutted all the stuff that I dont need in order to maintain clarity.  Basically this project can load up multiple standard format dictionaries, recieve and decode radius records.
+radiusd.rb requires the eventmachine gem, and is a simple implementation of a radius server the just echo's avp's as they come in.
+
+I have gutted all the stuff that I dont need in order to maintain clarity.  There may be code that is silly, or unused right now - I will try to clean that up after I get the baseline more developed.
