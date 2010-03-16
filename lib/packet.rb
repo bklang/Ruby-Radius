@@ -51,7 +51,7 @@ module Radius
               13 => 'Status-Client'
       }
 
-      @code, @identifier, len, @authenticator, attribute_data = data.unpack(p_hdr)
+      @code, @identifier, @length, @authenticator, attribute_data = data.unpack(p_hdr)
       @code = rcodes[@code]
 
       while (attribute_data.length > 0)
@@ -117,6 +117,10 @@ module Radius
 
     def to_s
       content=""
+      content+="Code: #{@code}\n"
+      content+="Identifier: #{@identifier}\n"
+      content+="Length: #{@length}\n"
+      content+="Authenticator: #{@authenticator}\n"
       @attributes.each_pair do |attribute,value|
          content+="#{attribute}: #{value}\n"
       end
