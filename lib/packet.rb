@@ -133,7 +133,7 @@ module Radius
       content+="Identifier: #{@identifier}\n"
       content+="Length: #{@length}\n"
       content+="Request Authenticator: #{@authenticator}\n"
-      content+="Response Authenticator: #{get_response_authenticator()}"
+      content+="Response Authenticator: #{get_response_authenticator()}\n"
       @attributes.each_pair do |attribute,value|
          content+="#{attribute}: #{value}\n"
       end
