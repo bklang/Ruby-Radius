@@ -19,7 +19,7 @@ class RadiusServer < EM::Connection
  	radiusPacket = Radius::Packet.new(dict)
 	radiusPacket.unpack(data)
   puts	radiusPacket.to_s()+"\n\n"
-  p radiusPacket.get_accounting_response_packet
+  send_data radiusPacket.get_accounting_response_packet
  end
 end
  
