@@ -6,7 +6,7 @@
 
 module Radius
 
-  class RadiusDictionary
+  class Dictionary
     def initialize
       @dictionary={}
       @dictionary[0]={}
@@ -61,15 +61,27 @@ module Radius
     end
 
     def get_attribute_type_by_id(vendor_id, attribute_id)
-       @dictionary[vendor_id][attribute_id]["TYPE"]
+       if @dictionary[vendor_id]!=nil &&  @dictionary[vendor_id][attribute_id]!=nil
+         @dictionary[vendor_id][attribute_id]["TYPE"]
+       else
+         return "string"
+       end
     end
 
     def get_attribute_name_by_id(vendor_id,attribute_id)
-      @dictionary[vendor_id][attribute_id]["NAME"]
+      if @dictionary[vendor_id]!=nil &&  @dictionary[vendor_id][attribute_id]!=nil
+        @dictionary[vendor_id][attribute_id]["NAME"]
+      else
+        return "unknown attribute"
+      end
     end
 
     def get_vendor_name_by_id(vendor_id)
-      @dictionary[vendor_id]["NAME"]
+      if @dictionary[vendor_id]!=nil
+        @dictionary[vendor_id]["NAME"]
+      else
+        return "unknown vendor"
+      end
     end
 
   end

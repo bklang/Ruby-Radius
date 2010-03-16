@@ -7,7 +7,7 @@
 
 module Radius
   require 'digest/md5'
-  require 'dictionary'
+  require 'lib/dictionary'
 
   class Packet
     # To initialize the object, pass a Radius::Dictionary object to it.
@@ -67,7 +67,7 @@ module Radius
           vendor_attribute_value = value.unpack("xxxxxxa#{vendor_attribute_length - 2}")[0]
 
           # look up the type of data so we know how to unpack it: string, int etc.
-          type = @dictionary.get_vsa_type_by_id(vendor_id, vendor_attribute_id)
+          type = @dictionary.get_attribute_type_by_id(vendor_id, vendor_attribute_id)
           if type == nil
             raise "Garbled vendor-specific attribute #{vendor_id}/#{vendor_attribute_id}"
           end
@@ -86,7 +86,7 @@ module Radius
             else
               raise "Unknown type found: #{vendor_attribute_id}"
           end
-          set_attribute(vendor_id,attribute_id,val)
+          set_attribute(vendor_id,vendor_attribute_id,val)
         else
           # This is not a vendor specific attribute
           type = @dictionary.get_attribute_type_by_id(0, type_id) # 0 is the "default" vendor id
@@ -107,12 +107,15 @@ module Radius
           end
           set_attribute(0,type_id,val)
         end
+        attribute_data[0, length] = ""
       end
+      
     end
 
     def set_attribute(vendor_id,attribute_id,value)
         attribute_name=@dictionary.get_attribute_name_by_id(vendor_id,attribute_id)
         @attributes[attribute_name]=value
+#        puts "#{attribute_name}: #{value}"
     end
 
     def to_s

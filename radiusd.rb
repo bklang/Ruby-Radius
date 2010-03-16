@@ -7,11 +7,18 @@ require 'lib/dictionary'
 class RadiusServer < EM::Connection
  
  def receive_data(data)
-	dict = Radius::RadiusDictionary.new
-	File.open("./dictionary") do | fn | dict.read(fn) end
+	dict = Radius::Dictionary.new
+  dictionary_path="./dictionaries"
+
+  Dir::foreach dictionary_path do |entry|
+   if entry!="." && entry!=".."
+     dict.load(dictionary_path+"/"+entry)
+     end
+  end
+  
  	radiusPacket = Radius::Packet.new(dict)
 	radiusPacket.unpack(data)
-  puts	radiusPacket.to_s()
+  puts	radiusPacket.to_s()+"\n\n"
  end
 end
  
@@ -21,5 +28,5 @@ EM.run do
  port = 1813
  EM.epoll
  EM.open_datagram_socket host, port, RadiusServer do | connection |
-end
+ end
 end
