@@ -125,7 +125,7 @@ module Radius
         end
       end
 
-      raise "Orphan values detected" if orphan_values.length
+      puts "Warning: Orphan values detected" if orphan_values.length > 0
 
     end
 
