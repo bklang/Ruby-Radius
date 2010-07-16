@@ -213,7 +213,7 @@ module Radius
         if !attr.has_key?(:vendor)
           attr[:vendor] = 0
         end
-        if !attr.has_key(:number)
+        if !attr.has_key?(:number)
           attr[:number] = @dictionary.attr_num(attr[:name])
         end
         @attributes[attr[:vendor]][attr[:number]] = attr[:value]
