@@ -106,7 +106,7 @@ module Radius
 
           #Store a name key, and an id key
           linetype, attr, value_name, value_id = tokens
-          attr = type.strip!
+          attr.strip!
           value_name.strip!
           value_id = value_id.to_i
           begin
