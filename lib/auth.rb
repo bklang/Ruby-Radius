@@ -33,7 +33,7 @@ module Radius
     # We can inspect and alter the contents of the internal RADIUS
     # packet here (although this is probably not required for simple
     # work)
-    attr_reader :@packet
+    attr_reader :packet
 
     # This method initializes the Auth object, given a dictionary
     # filename to read, the RADIUS host[:port] to connect to, and a
