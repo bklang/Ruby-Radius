@@ -247,6 +247,7 @@ module Radius
           attribute = @dictionary.get_attribute_name_by_id(vendor_id, attribute)
           # TODO convert enumerated values back to strings
           content+="#{attribute}: #{value}\n"
+        end
       end
       content
     end
