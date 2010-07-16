@@ -84,10 +84,9 @@ module Radius
       p_vsa_3com = "CCNNa*"     # used by 3COM devices
 
       attstr = ""
-      each_attr {
-        |attr, value|
-        anum = @dictionary.attr_num(attr)
-        val = case @dictionary.attr_type(anum).downcase
+      each_attr { |attr, value|
+        attr = @dictionary.attr_num(attr) if attr.class == String
+        val = case @dictionary.attr_type(attr).downcase
               when "string" then value
               when "integer"
                 [@dictionary.attr_has_val?(anum) ?
@@ -98,14 +97,13 @@ module Radius
               else
                 next
               end
-        attstr += [@dictionary.attr_num(attr), val.length + 2, val].pack(p_attr)
+        attstr += [attr, val.length + 2, val].pack(p_attr)
       }
 
       # Pack vendor-specific attributes
-      each_vsa {
-        |vendor, attr, datum|
-        vsattr_num = @dictionary.vsattr_num(vendor, attr)
-        vval = case @dictionary.vsattr_type(vendor, attr)
+      each_vsa { |vendor, attr, datum|
+        vsattr_num = @dictionary.attr_num(attr, vendor)
+        vval = case @dictionary.attr_type(attr, vendor)
                when "string" then datum
                when "integer"
                  @dictionary.vsattr_has_val(vendor, vsattr_num) ?
@@ -118,10 +116,10 @@ module Radius
         if vendor == 429
           # For 3COM devices
           attstr += [VSA_TYPE, vval.length + 10, vendor,
-            @dictionary.vsattr_num(vendor, attr), vval].pack(p_vsa_3com)
+            attr, vval].pack(p_vsa_3com)
         else
           attstr += [VSA_TYPE, vval.length + 8, vendor,
-            @dictionary.vsattr_num(vendor, attr), vval.length + 2,
+            attr, vval.length + 2,
             vval].pack(p_vsa)
         end
       }
@@ -132,15 +130,15 @@ module Radius
 
     # unpacks raw radius data contents so
     # it can be analyzed with other methods
-    def unpack(data)
+    def unpack(data, secret)
       p_hdr = "CCna16a*"
 
       rcodes = CODES.invert
 
       @code, @identifier, @length, @authenticator, attribute_data = data.unpack(p_hdr)
       @code = rcodes[@code]
-  #  This should obviously not be hardcoded
-      @secret="imgradius"
+
+      @secret=secret
 
       while (attribute_data.length > 0)
         # read the length of the packet data
@@ -151,7 +149,7 @@ module Radius
 
         if (type_id == VSA_TYPE)
           # handle vendor-specific attributes
-          vendor_id, vendor_attribute_id, vendor_attribute_length = value.unpack("NCC")
+          vendor_id, vendor_attribute_id, vendor_attribute_length = value.unpack("NCC").map{ |v| v.to_i }
           vendor_attribute_value = value.unpack("xxxxxxa#{vendor_attribute_length - 2}")[0]
 
           # look up the type of data so we know how to unpack it: string, int etc.
@@ -172,7 +170,7 @@ module Radius
             when 'date' then
               vendor_attribute_value.unpack("N")[0]
             else
-              raise "Unknown type found: #{vendor_attribute_id}"
+              puts "Unknown type found: #{type}"
           end
           vendor = @dictionary.get_vendor_name_by_id(vendor_id)
           attr = @dictionary.get_attribute_name_by_id(vendor_id, vendor_attribute_id)
@@ -213,8 +211,11 @@ module Radius
         if !attr.has_key?(:vendor)
           attr[:vendor] = 0
         end
+        if attr[:vendor].class == String
+          attr[:vendor] = @dictionary.vendor_num(attr[:vendor])
+        end
         if !attr.has_key?(:number)
-          attr[:number] = @dictionary.attr_num(attr[:name])
+          attr[:number] = @dictionary.attr_num(attr[:name], attr[:vendor])
         end
         if (@attributes[attr[:vendor]].nil?)
           @attributes[attr[:vendor]] = {}
@@ -244,8 +245,8 @@ module Radius
       content+="Code: #{@code}\n"
       content+="Identifier: #{@identifier}\n"
       content+="Length: #{@length}\n"
-      content+="Request Authenticator: #{@authenticator}\n"
-      content+="Response Authenticator: #{get_response_authenticator()}\n"
+      #content+="Request Authenticator: #{@authenticator}\n"
+      #content+="Response Authenticator: #{get_response_authenticator()}\n"
       @attributes.each_pair do |vendor_id, vattrs|
         vattrs.each_pair do |attribute,value|
           attribute = @dictionary.get_attribute_name_by_id(vendor_id, attribute)
@@ -259,8 +260,7 @@ module Radius
     # This method is provided a block which will pass every
     # attribute-value pair currently available.
     def each_attr
-      @attributes.each_pair {
-        |key, value|
+      @attributes[0].each_pair { |key, value|
         yield(key, value)
       }
     end
@@ -269,17 +269,11 @@ module Radius
     # to a passed block.  The parameters to the block are the vendor
     # ID, the attribute name, and the attribute value.
     def each_vsa
-      @vsattributes.each_index {
-        |vendorid|
-        if @vsattributes[vendorid] != nil
-          @vsattributes[vendorid].each_pair {
-            |key, value|
-            value.each {
-              |val|
-              yield(vendorid, key, val)
-            }
-          }
-        end
+      @attributes.each { |vendorid, vsattrs|
+        next if vendorid == 0
+        vsattrs.each_pair { |key, value|
+          yield(vendorid, key, value)
+        }
       }
     end
 

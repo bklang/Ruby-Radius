@@ -35,15 +35,18 @@ module Radius
     # work)
     attr_reader :packet
 
+    attr_reader :dictionary
+ 
     # This method initializes the Auth object, given a dictionary
     # filename to read, the RADIUS host[:port] to connect to, and a
     # timeout value in seconds for the connection.
     # =====Parameters
     # +dictfilename+:: Dictionary filename to read
     # +radhost+:: name of RADIUS server optionally followed by port number
+    # +secret+:: RADIUS shared secret
     # +myip+:: the client's own IP address (NAS IP address)
     # +timeout+:: Timeout time 
-    def initialize(dictfilename, radhost, myip, timeout = 5)
+    def initialize(dictfilename, radhost, secret, myip, timeout = 5)
       @dict = Radius::Dictionary.new
       if dictfilename != nil
         @dict.load(dictfilename)
@@ -56,6 +59,7 @@ module Radius
       @port = Socket.getservbyname("radius", "udp") unless @port
       @port = 1812 unless @port
       @port = @port.to_i	# just in case
+      @secret = secret
       @timeout = timeout
       @sock = UDPSocket.open
       @sock.connect(@host, @port)
@@ -67,18 +71,31 @@ module Radius
     # =====Parameters
     # +name+:: The user name to verify
     # +pwd+:: The password associated with this name
-    # +secret+:: The RADIUS secret of the system
     # =====Return value
     # returns true or false depending on whether or not the attempt succeeded or failed.
-    def check_passwd(secret, name, pwd = nil)
+    def check_passwd(name, pwd = nil)
       @packet.code = 'Access-Request'
       gen_authenticator
       @packet.set_attributes({ :name => 'User-Name', :value => name })
       @packet.set_attributes({ :name => 'NAS-IP-Address', :value => @myip })
-      @packet.add_password(pwd, secret) if !pwd.nil?
+      @packet.add_password(pwd, @secret) if !pwd.nil?
+puts @packet.to_s
       send_packet
       recv_packet
+puts @packet.to_s
       return(@packet.code == 'Access-Accept')
+    end
+
+    def get_accounting(name)
+      @packet.code = 'Accounting-Request'
+      gen_authenticator
+      @packet.set_attributes({ :name => 'User-Name', :value => name })
+      @packet.set_attributes({ :name => 'NAS-IP-Address', :value => @myip })
+puts @packet.to_s
+      send_packet
+      recv_packet
+puts @packet.to_s
+      return(@packet.code == 'Access-Response')
     end
 
     protected
@@ -114,7 +131,7 @@ module Radius
 	raise "Timed out waiting for response packet from server"
       end
       data = @sock.recvfrom(65536)
-      @packet.unpack(data[0])
+      @packet.unpack(data[0], @secret)
       return(@packet)
     end
   end

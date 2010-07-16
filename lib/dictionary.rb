@@ -53,6 +53,7 @@ module Radius
           # Setup a new hash to hold attributes and values for the vendor id
           linetype, name, id = tokens
           name.strip!
+          id = id.to_i
 
           if @dictionary[id].nil?
             @dictionary[id] = { :name => name }
@@ -90,7 +91,7 @@ module Radius
 
           @dictionary[vendor_id][number] = {}
           @dictionary[vendor_id][number][:name] = name
-          @dictionary[vendor_id][number][:type] = name
+          @dictionary[vendor_id][number][:type] = type
           @dictionary[vendor_id][name] = number
 
           if orphan_values.has_key?(number)
@@ -146,10 +147,11 @@ module Radius
     end
 
     def get_vendor_name_by_id(vendor_id)
+      vendor_id = vendor_id.to_i
       if @dictionary[vendor_id]!=nil
         @dictionary[vendor_id][:name]
       else
-        raise "unknown vendor"
+        raise "unknown vendor: #{vendor_id}"
       end
     end
 
@@ -160,11 +162,15 @@ module Radius
     def attr_num(attr, vendor = 0)
       if vendor.class == "String"
         # Look up the vendor ID by name
-        vendor = @dictionary[vendor] or raise "unknown vendor"
+        vendor = vendor_num(vendor) or raise "unknown vendor"
       end
 
-      raise "unknown attribute" if @dictionary[vendor][attr].nil?
+      raise "unknown attribute: #{attr}, #{vendor}" if @dictionary[vendor][attr].nil?
       @dictionary[vendor][attr]
+    end
+
+    def vendor_num(vendor)
+      @dictionary[vendor]
     end
 
     def attr_type(attr, vendor = 0)
