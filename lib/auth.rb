@@ -25,8 +25,8 @@
 #
 
 module Radius
-  require 'radius/packet'
-  require 'radius/dictionary'
+  require 'lib/packet'
+  require 'lib/dictionary'
   require 'socket'
 
   class Auth
