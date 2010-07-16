@@ -73,9 +73,9 @@ module Radius
     def check_passwd(secret, name, pwd = nil)
       @packet.code = 'Access-Request'
       gen_authenticator
-      @packet.set_attr('User-Name', name)
-      @packet.set_attr('NAS-IP-Address', @myip)
-      @packet.set_password(pwd, secret) if !pwd.nil?
+      @packet.set_attributes({ :name => 'User-Name', :value => name })
+      @packet.set_attributes({ :name => 'NAS-IP-Address', :value => @myip })
+      @packet.add_password(pwd, secret) if !pwd.nil?
       send_packet
       recv_packet
       return(@packet.code == 'Access-Accept')

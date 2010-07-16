@@ -174,7 +174,9 @@ module Radius
             else
               raise "Unknown type found: #{vendor_attribute_id}"
           end
-          set_attribute(vendor_id,vendor_attribute_id,val)
+          vendor = @dictionary.get_vendor_name_by_id(vendor_id)
+          attr = @dictionary.get_attribute_name_by_id(vendor_id, vendor_attribute_id)
+          set_attributes({:vendor => vendor, :name => attr, :value => val})
         else
           # This is not a vendor specific attribute
           type = @dictionary.get_attribute_type_by_id(0, type_id) # 0 is the "default" vendor id
@@ -193,25 +195,28 @@ module Radius
             else
               raise "Unknown attribute type found: #{type}"
           end
-          set_attribute(0,type_id,val)
+          set_attributes({ :number => type_id, :value => val })
         end
         attribute_data[0, length] = ""
       end
       
     end
 
-    def set_attribute(vendor_id,attribute_id,value)
-        attribute_name=@dictionary.get_attribute_name_by_id(vendor_id,attribute_id)
-        @attributes[attribute_name]=value
-#        puts "#{attribute_name}: #{value}"
-    end
-
-    def add_attributes(*args)
+    def set_attributes(*args)
       args.each { |attr|
-        if !(attr.has_key?(:name) && attr.has_key?(:value))
-          raise ArgumentError, "Must supply :name and :value"
+        if !(attr.has_key?(:name) && attr.has_key?(:number))
+          raise ArgumentError, "Must supply :name or :number"
         end
-        @attributes[attr[:name]] = attr[:value]
+        if !attr.has_key?(:value)
+          raise ArgumentError, "Must supply :value"
+        end
+        if !attr.has_key?(:vendor)
+          attr[:vendor] = 0
+        end
+        if !attr.has_key(:number)
+          attr[:number] = @dictionary.attr_num(attr[:name])
+        end
+        @attributes[attr[:vendor]][attr[:number]] = attr[:value]
       }
     end
 
@@ -237,8 +242,11 @@ module Radius
       content+="Length: #{@length}\n"
       content+="Request Authenticator: #{@authenticator}\n"
       content+="Response Authenticator: #{get_response_authenticator()}\n"
-      @attributes.each_pair do |attribute,value|
-         content+="#{attribute}: #{value}\n"
+      @attributes.each_pair do |vendor_id, vattrs|
+        vattrs.each_pair do |attribute,value|
+          attribute = @dictionary.get_attribute_name_by_id(vendor_id, attribute)
+          # TODO convert enumerated values back to strings
+          content+="#{attribute}: #{value}\n"
       end
       content
     end
