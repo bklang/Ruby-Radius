@@ -46,10 +46,7 @@ module Radius
     def initialize(dictfilename, radhost, myip, timeout = 5)
       @dict = Radius::Dictionary.new
       if dictfilename != nil
-	File.open(dictfilename) {
-	  |fn|
-	  @dict.read(fn)
-	}
+        @dict.load(dictfilename)
       end
       @packet = Radius::Packet.new(@dict)
       # this is probably better than starting identifiers at 0
