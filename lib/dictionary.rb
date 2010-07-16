@@ -8,7 +8,8 @@ module Radius
 
   class Dictionary
     def initialize
-      @dictionary = {}
+      @dictionary = { 0 => { :name => "RFC" },
+                      "RFC" => 0 }
     end
 
     def load(dictionary_file)
@@ -92,7 +93,7 @@ module Radius
           @dictionary[vendor_id][number][:type] = name
           @dictionary[vendor_id][name] = number
 
-          if orphan_values.key_key(number)
+          if orphan_values.has_key?(number)
             @dictionary[vendor_id][number][:values] = orphan_values.delete(number)
           end
 
