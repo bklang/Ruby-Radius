@@ -70,12 +70,12 @@ module Radius
     # +secret+:: The RADIUS secret of the system
     # =====Return value
     # returns true or false depending on whether or not the attempt succeeded or failed.
-    def check_passwd(name, pwd, secret)
+    def check_passwd(secret, name, pwd = nil)
       @packet.code = 'Access-Request'
       gen_authenticator
       @packet.set_attr('User-Name', name)
       @packet.set_attr('NAS-IP-Address', @myip)
-      @packet.set_password(pwd, secret)
+      @packet.set_password(pwd, secret) if !pwd.nil?
       send_packet
       recv_packet
       return(@packet.code == 'Access-Accept')

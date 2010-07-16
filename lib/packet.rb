@@ -270,6 +270,32 @@ module Radius
       }
     end
 
+    # The RADIUS User-Password attribute is encoded with a shared
+    # secret.  This method will prepare the encoded version of the
+    # password.  Note that this method <em>always</em> stores the
+    # encrypted password in the 'User-Password' attribute.  Some
+    # (non-RFC 2138-compliant) servers have been reported that insist
+    # on using the 'Password' attribute instead.
+    #
+    # ====Parameters
+    # +passwd+:: The password to encrypt
+    # +secret+:: The shared secret of the RADIUS system
+    #
+    def set_password(pwdin, secret)
+      lastround = @authenticator
+      pwdout = ""
+      # pad to 16n bytes
+      pwdin += "\000" * (15-(15 + pwdin.length) % 16)
+      0.step(pwdin.length-1, 16) {
+        |i|
+        lastround = xor_str(pwdin[i, 16],
+                            Digest::MD5.digest(secret + lastround))
+        pwdout += lastround
+      }
+      set_attr("User-Password", pwdout)
+      return(pwdout)
+    end
+
   end
 end
 

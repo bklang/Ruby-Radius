@@ -125,7 +125,7 @@ module Radius
         end
       end
 
-      puts "Warning: Orphan values detected" if orphan_values.length > 0
+      puts "Warning: Orphan values detected in #{dictionary_file}" if orphan_values.length > 0
 
     end
 
