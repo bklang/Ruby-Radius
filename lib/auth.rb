@@ -88,16 +88,15 @@ module Radius
     def gen_authenticator
       # get authenticator data from /dev/urandom if possible
        if (File.exist?("/dev/urandom"))
- 	File.open("/dev/urandom") {
- 	  |urandom|
- 	  @packet.authenticator = urandom.read(16)
- 	}
+        File.open("/dev/urandom") { |urandom|
+          @packet.authenticator = urandom.read(16)
+        }
        else
-	# use the Kernel:rand method.  This is quite probably not
-	# as secure as using /dev/urandom, be wary...
-	@packet.authenticator = [rand(65536), rand(65536), rand(65536),
-	  rand(65536), rand(65536), rand(65536), rand(65536),
-	  rand(65536)].pack("n8")
+        # use the Kernel:rand method.  This is quite probably not
+        # as secure as using /dev/urandom, be wary...
+        @packet.authenticator = [rand(65536), rand(65536), rand(65536),
+          rand(65536), rand(65536), rand(65536), rand(65536),
+          rand(65536)].pack("n8")
       end
       return(@packet.authenticator)
     end
