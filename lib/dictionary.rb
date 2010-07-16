@@ -118,6 +118,7 @@ module Radius
           rescue
             # The attribute must not have yet been defined.  Stash it for now
             # and add it when we eventually parse the attribute.
+            orphan_values[attr] = {}
             orphan_values[attr][value_id] = value_name
             orphan_values[attr][value_name] = value_id
           end
