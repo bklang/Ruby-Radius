@@ -204,7 +204,7 @@ module Radius
 
     def set_attributes(*args)
       args.each { |attr|
-        if !(attr.has_key?(:name) && attr.has_key?(:number))
+        if !(attr.has_key?(:name) || attr.has_key?(:number))
           raise ArgumentError, "Must supply :name or :number"
         end
         if !attr.has_key?(:value)
