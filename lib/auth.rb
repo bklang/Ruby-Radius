@@ -43,7 +43,7 @@ module Radius
     # +radhost+:: name of RADIUS server optionally followed by port number
     # +myip+:: the client's own IP address (NAS IP address)
     # +timeout+:: Timeout time 
-    def initialize(dictfilename, radhost, myip, timeout)
+    def initialize(dictfilename, radhost, myip, timeout = 5)
       @dict = Radius::Dict.new
       if dictfilename != nil
 	File.open(dictfilename) {
