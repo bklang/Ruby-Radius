@@ -44,7 +44,7 @@ module Radius
     # +myip+:: the client's own IP address (NAS IP address)
     # +timeout+:: Timeout time 
     def initialize(dictfilename, radhost, myip, timeout = 5)
-      @dict = Radius::Dict.new
+      @dict = Radius::Dictionary.new
       if dictfilename != nil
 	File.open(dictfilename) {
 	  |fn|
