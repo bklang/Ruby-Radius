@@ -34,7 +34,7 @@ module Radius
             else
               # File names without a leading slash are relative
               # to the current file
-              load(File.basename(dictionary_file) + "/" + file)
+              load(File.dirname(dictionary_file) + "/" + file)
             end
 
           when "VENDOR"    # Setup a new hash to hold attributes and values for the vendor id
