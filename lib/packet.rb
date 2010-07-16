@@ -10,6 +10,34 @@ module Radius
   require 'lib/dictionary'
 
   class Packet
+        # The code field is returned as a string.  As of this writing, the
+    # following codes are recognized:
+    #
+    #   Access-Request          Access-Accept
+    #   Access-Reject           Accounting-Request
+    #   Accounting-Response     Access-Challenge
+    #   Status-Server           Status-Client
+    attr_reader :code
+
+    # The code may be set to any of the strings described above in the
+    # code attribute reader.
+    attr_writer :code
+
+    # The one-byte Identifier used to match requests and responses is
+    # obtained as a character.
+    attr_reader :identifier
+
+    # The Identifer used to match RADIUS requests and responses can
+    # also be directly set using this.
+    attr_writer :identifier
+
+    # The 16-byte Authenticator field can be read as a character
+    # string with this attribute reader.
+    attr_reader :authenticator
+    # The authenticator field can be changed with this attribute
+    # writer.
+    attr_writer :authenticator
+
     # To initialize the object, pass a Radius::Dictionary object to it.
     def initialize(dict)
       @dictionary = dict
@@ -17,6 +45,18 @@ module Radius
     end
 
     private
+
+    CODES = {
+        'Access-Request' => 1,
+        'Access-Accept' => 2,
+        'Access-Reject' => 3,
+        'Accounting-Request' => 4,
+        'Accounting-Response' => 5,
+        'Access-Challenge' => 11,
+        'Status-Server' => 12,
+        'Status-Client' => 13
+    }
+
     # I'd like to think that these methods should be built in
     # the Socket class
     def inet_aton(hostname)
@@ -36,20 +76,66 @@ module Radius
 
     VSA_TYPE = 26        # type given to vendor-specific attributes in RFC 2138
 
+    def pack
+      hdrlen = 1 + 1 + 2 + 16   # size of packet header
+      p_hdr = "CCna16a*"        # pack template for header
+      p_attr = "CCa*"           # pack template for attribute
+      p_vsa = "CCNCCa*"         # pack template for VSA's
+      p_vsa_3com = "CCNNa*"     # used by 3COM devices
+
+      attstr = ""
+      each_attr {
+        |attr, value|
+        anum = @dictionary.attr_num(attr)
+        val = case @dictionary.attr_type(anum).downcase
+              when "string" then value
+              when "integer"
+                [@dictionary.attr_has_val?(anum) ?
+                 @dictionary.val_num(anum, value) : value].pack("N")
+              when "ipaddr" then [inet_aton(value)].pack("N")
+              when "date" then [value].pack("N")
+              when "time" then [value].pack("N")
+              else
+                next
+              end
+        attstr += [@dictionary.attr_num(attr), val.length + 2, val].pack(p_attr)
+      }
+
+      # Pack vendor-specific attributes
+      each_vsa {
+        |vendor, attr, datum|
+        vsattr_num = @dictionary.vsattr_num(vendor, attr)
+        vval = case @dictionary.vsattr_type(vendor, attr)
+               when "string" then datum
+               when "integer"
+                 @dictionary.vsattr_has_val(vendor, vsattr_num) ?
+                 [@dictionary.vsaval_num(vendor, vsattr_num, datum)].pack("N") :
+                   [datum].pack("N")
+               when "ipaddr" then inet_aton(datum)
+               when "time" then [datum].pack("N")
+               else next
+               end
+        if vendor == 429
+          # For 3COM devices
+          attstr += [VSA_TYPE, vval.length + 10, vendor,
+            @dictionary.vsattr_num(vendor, attr), vval].pack(p_vsa_3com)
+        else
+          attstr += [VSA_TYPE, vval.length + 8, vendor,
+            @dictionary.vsattr_num(vendor, attr), vval.length + 2,
+            vval].pack(p_vsa)
+        end
+      }
+
+      return([CODES[@code], @identifier, attstr.length + hdrlen,
+               @authenticator, attstr].pack(p_hdr))
+    end
+
     # unpacks raw radius data contents so
     # it can be analyzed with other methods
     def unpack(data)
       p_hdr = "CCna16a*"
-      rcodes = {
-              1 => 'Access-Request',
-              2  => 'Access-Accept',
-              3  => 'Access-Reject',
-              4  => 'Accounting-Request',
-              5  => 'Accounting-Response',
-              11 => 'Access-Challenge',
-              12 => 'Status-Server',
-              13 => 'Status-Client'
-      }
+
+      rcodes = CODES.invert
 
       @code, @identifier, @length, @authenticator, attribute_data = data.unpack(p_hdr)
       @code = rcodes[@code]
@@ -120,6 +206,15 @@ module Radius
 #        puts "#{attribute_name}: #{value}"
     end
 
+    def add_attributes(*args)
+      args.each { |attr|
+        if !(attr.has_key?(:name) && attr.has_key?(:value))
+          raise ArgumentError, "Must supply :name and :value"
+        end
+        @attributes[attr[:name]] = attr[:value]
+      }
+    end
+
     def get_accounting_response_packet
        hdrlen = 1 + 1 + 2 + 16 # size of packet header
        p_hdr = "CCna16a*" # pack template for header
@@ -148,7 +243,34 @@ module Radius
       content
     end
 
+    # This method is provided a block which will pass every
+    # attribute-value pair currently available.
+    def each_attr
+      @attributes.each_pair {
+        |key, value|
+        yield(key, value)
+      }
+    end
+
+    # This method will pass each vendor-specific attribute available
+    # to a passed block.  The parameters to the block are the vendor
+    # ID, the attribute name, and the attribute value.
+    def each_vsa
+      @vsattributes.each_index {
+        |vendorid|
+        if @vsattributes[vendorid] != nil
+          @vsattributes[vendorid].each_pair {
+            |key, value|
+            value.each {
+              |val|
+              yield(vendorid, key, val)
+            }
+          }
+        end
+      }
+    end
+
   end
-  end
+end
 
 
