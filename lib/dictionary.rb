@@ -25,6 +25,10 @@ module Radius
         token=tokens[0].upcase
 
         case token
+          when "$INCLUDE"
+            # This is a FreeRADIUS-style file inclusion directive
+            load(tokens[1])
+
           when "VENDOR"    # Setup a new hash to hold attributes and values for the vendor id
             #Example line
             #VENDOR    Digium        22736
