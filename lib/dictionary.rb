@@ -27,7 +27,15 @@ module Radius
         case token
           when "$INCLUDE"
             # This is a FreeRADIUS-style file inclusion directive
-            load(tokens[1])
+            file = tokens[1]
+            if file =~ /^\//
+              # File names with a leading slash are absolute
+              load(tokens[1])
+            else
+              # File names without a leading slash are relative
+              # to the current file
+              load(File.basename(dictionary_file) + "/" + file)
+            end
 
           when "VENDOR"    # Setup a new hash to hold attributes and values for the vendor id
             #Example line
