@@ -10,41 +10,6 @@ module Radius
   require 'lib/dictionary'
 
   class Packet
-        # The code field is returned as a string.  As of this writing, the
-    # following codes are recognized:
-    #
-    #   Access-Request          Access-Accept
-    #   Access-Reject           Accounting-Request
-    #   Accounting-Response     Access-Challenge
-    #   Status-Server           Status-Client
-    attr_reader :code
-
-    # The code may be set to any of the strings described above in the
-    # code attribute reader.
-    attr_writer :code
-
-    # The one-byte Identifier used to match requests and responses is
-    # obtained as a character.
-    attr_reader :identifier
-
-    # The Identifer used to match RADIUS requests and responses can
-    # also be directly set using this.
-    attr_writer :identifier
-
-    # The 16-byte Authenticator field can be read as a character
-    # string with this attribute reader.
-    attr_reader :authenticator
-    # The authenticator field can be changed with this attribute
-    # writer.
-    attr_writer :authenticator
-
-    # To initialize the object, pass a Radius::Dictionary object to it.
-    def initialize(dict)
-      @dictionary = dict
-      @attributes = {}
-    end
-
-    private
 
     CODES = {
         'Access-Request' => 1,
@@ -57,94 +22,59 @@ module Radius
         'Status-Client' => 13
     }
 
-    # I'd like to think that these methods should be built in
-    # the Socket class
-    def inet_aton(hostname)
-      if (hostname =~ /([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)/)
-        return((($1.to_i & 0xff) << 24) + (($2.to_i & 0xff) << 16) +
-                (($3.to_i & 0xff) << 8) + (($4.to_i & 0xff)))
-      end
-      return(0)
-    end
-
-    def inet_ntoa(iaddr)
-      return(sprintf("%d.%d.%d.%d", (iaddr >> 24) & 0xff, (iaddr >> 16) & 0xff,
-                     (iaddr >> 8) & 0xff, (iaddr) & 0xff))
-    end
-
-    public
-
     VSA_TYPE = 26        # type given to vendor-specific attributes in RFC 2138
 
-    def pack
-      hdrlen = 1 + 1 + 2 + 16   # size of packet header
-      p_hdr = "CCna16a*"        # pack template for header
-      p_attr = "CCa*"           # pack template for attribute
-      p_vsa = "CCNCCa*"         # pack template for VSA's
-      p_vsa_3com = "CCNNa*"     # used by 3COM devices
+    # The one-byte Identifier used to match requests and responses is
+    # obtained as a character.
+    attr_accessor :identifier
 
-      attstr = ""
-      each_attr { |attr, value|
-        attr = @dictionary.attr_num(attr) if attr.class == String
-        val = case @dictionary.attr_type(attr).downcase
-              when "string" then value
-              when "integer"
-                [@dictionary.attr_has_val?(anum) ?
-                 @dictionary.val_num(anum, value) : value].pack("N")
-              when "ipaddr" then [inet_aton(value)].pack("N")
-              when "date" then [value].pack("N")
-              when "time" then [value].pack("N")
-              else
-                next
-              end
-        attstr += [attr, val.length + 2, val].pack(p_attr)
-      }
+    # The 16-byte Authenticator field can be read as a character string
+    attr_accessor :authenticator
 
-      # Pack vendor-specific attributes
-      each_vsa { |vendor, attr, datum|
-        vsattr_num = @dictionary.attr_num(attr, vendor)
-        vval = case @dictionary.attr_type(attr, vendor)
-               when "string" then datum
-               when "integer"
-                 @dictionary.vsattr_has_val(vendor, vsattr_num) ?
-                 [@dictionary.vsaval_num(vendor, vsattr_num, datum)].pack("N") :
-                   [datum].pack("N")
-               when "ipaddr" then inet_aton(datum)
-               when "time" then [datum].pack("N")
-               else next
-               end
-        if vendor == 429
-          # For 3COM devices
-          attstr += [VSA_TYPE, vval.length + 10, vendor,
-            attr, vval].pack(p_vsa_3com)
-        else
-          attstr += [VSA_TYPE, vval.length + 8, vendor,
-            attr, vval.length + 2,
-            vval].pack(p_vsa)
-        end
-      }
+    attr_accessor :dictionary
 
-      return([CODES[@code], @identifier, attstr.length + hdrlen,
-               @authenticator, attstr].pack(p_hdr))
+    attr_reader :fromaddr
+
+    attr_accessor :toaddr
+
+    # To initialize the object, pass a Radius::Dictionary object to it.
+    def initialize(dict, secret, radhost = nil)
+      if dict.class == String
+        # Treat this as the path to a dictionary file and try to load it.
+        @dictionary = Radius::Dictionary.new(dict)
+      elsif dict.class == Radius::Dictionary
+        @dictionary = dict
+      else
+        raise ArgumentError, "Must provide a valid dictionary."
+      end
+
+      @attributes = {}
+      @code = nil
+      @secret = secret
+
+      if !radhost.nil?
+        @host, @port = radhost.split(":")
+        @port = Socket.getservbyname("radius", "udp") unless @port
+        @port = 1812 unless @port
+        @port = @port.to_i	# just in case
+      end
     end
 
     # unpacks raw radius data contents so
     # it can be analyzed with other methods
-    def unpack(data, secret)
+    # Returns a new instance of Radius::Packet
+    def self.unpack(dictionary, data, secret)
+      p = Radius::Packet.new(dictionary, secret)
+
       p_hdr = "CCna16a*"
 
-      rcodes = CODES.invert
-
-      @code, @identifier, @length, @authenticator, attribute_data = data.unpack(p_hdr)
-      @code = rcodes[@code]
-
-      @secret=secret
+      p.code, p.identifier, length, p.authenticator, attribute_data = data.unpack(p_hdr)
 
       while (attribute_data.length > 0)
         # read the length of the packet data
-        length = attribute_data.unpack("xC")[0].to_i
+        alength = attribute_data.unpack("xC")[0].to_i
         # read the type header to determine if this is a vsa
-        type_id, value = attribute_data.unpack("Cxa#{length-2}")
+        type_id, value = attribute_data.unpack("Cxa#{alength-2}")
         type_id = type_id.to_i
 
         if (type_id == VSA_TYPE)
@@ -153,7 +83,7 @@ module Radius
           vendor_attribute_value = value.unpack("xxxxxxa#{vendor_attribute_length - 2}")[0]
 
           # look up the type of data so we know how to unpack it: string, int etc.
-          type = @dictionary.get_attribute_type_by_id(vendor_id, vendor_attribute_id)
+          type = p.dictionary.attr_type(vendor_attribute_id, vendor_id)
           if type == nil
             raise "Garbled vendor-specific attribute #{vendor_id}/#{vendor_attribute_id}"
           end
@@ -172,12 +102,12 @@ module Radius
             else
               puts "Unknown type found: #{type}"
           end
-          vendor = @dictionary.get_vendor_name_by_id(vendor_id)
-          attr = @dictionary.get_attribute_name_by_id(vendor_id, vendor_attribute_id)
-          set_attributes({:vendor => vendor, :name => attr, :value => val})
+          vendor = p.dictionary.vendor_name(vendor_id)
+          attr = p.dictionary.attr_name(vendor_id, vendor_attribute_id)
+          p.set_attributes({:vendor => vendor, :attr => attr, :value => val})
         else
           # This is not a vendor specific attribute
-          type = @dictionary.get_attribute_type_by_id(0, type_id) # 0 is the "default" vendor id
+          type = p.dictionary.attr_type(0, type_id) # 0 is the "default" vendor id
           raise "Garbled attribute #{type_id}" if (type == nil)
           val = case type
             when 'string' then
@@ -193,35 +123,209 @@ module Radius
             else
               raise "Unknown attribute type found: #{type}"
           end
-          set_attributes({ :number => type_id, :value => val })
+          p.set_attributes({ :attr => type_id, :value => val })
         end
-        attribute_data[0, length] = ""
+        attribute_data[0, alength] = ""
       end
-      
+
+      # Return the parsed packet
+      p
+    end
+
+    # The code field is returned as a string.  As of this writing, the
+    # following codes are recognized:
+    #
+    #   Access-Request          Access-Accept
+    #   Access-Reject           Accounting-Request
+    #   Accounting-Response     Access-Challenge
+    #   Status-Server           Status-Client
+    def code=(code)
+      if CODES.has_key?(code)
+        @code = code
+      elsif CODES.invert.has_key?(code)
+        @code = CODES.invert[code]
+      else
+        raise ArgumentError, "Invalid packet code #{code}"
+      end
+    end
+
+    def code
+      @code
+    end
+
+
+    private
+
+    def gen_authenticator(packetlen = nil)
+
+    end
+
+    # I'd like to think that these methods should be built in
+    # the Socket class
+    # FIXME: Use IPAddr class (http://www.ruby-forum.com/topic/58191)
+    def inet_aton(hostname)
+      if (hostname =~ /([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)/)
+        return((($1.to_i & 0xff) << 24) + (($2.to_i & 0xff) << 16) +
+                (($3.to_i & 0xff) << 8) + (($4.to_i & 0xff)))
+      end
+      return(0)
+    end
+
+    def inet_ntoa(iaddr)
+      return(sprintf("%d.%d.%d.%d", (iaddr >> 24) & 0xff, (iaddr >> 16) & 0xff,
+                     (iaddr >> 8) & 0xff, (iaddr) & 0xff))
+    end
+
+    public
+
+    # Sends a packet to the server via UDP.
+    def send(timeout = 5)
+      sock = UDPSocket.open
+      sock.connect(@host, @port)
+      data = self.pack
+      @identifier = (@identifier + 1) & 0xff
+      # def send(mesg, flags, *rest)
+      sock.send(data, 0)
+      # Return the socket so it can be read
+      sock
+    end
+
+
+    def pack
+      if (@code.nil? || @identifier.nil? || @attributes.empty?)
+        raise ArgumentError, "Must specify all required packet information: code, identifier, attributes"
+      end
+
+      hdrlen = 1 + 1 + 2 + 16   # size of packet header
+      p_hdr = "CCna16a*"        # pack template for header
+      p_attr = "CCa*"           # pack template for attribute
+      p_vsa = "CCNCCa*"         # pack template for VSA's
+      p_vsa_3com = "CCNNa*"     # used by 3COM devices
+
+      attstr = ""
+      each_attr { |attr, value|
+        attr = @dictionary.attr_num(attr) if attr.class == String
+        val = case @dictionary.attr_type(attr).downcase
+              when "string" then value
+              when "integer"
+                [@dictionary.attr_has_val?(attr) && value.class == String ?
+                 @dictionary.val_convert(attr, value) : value].pack("N")
+              when "ipaddr" then [inet_aton(value)].pack("N")
+              when "date" then [value].pack("N")
+              when "time" then [value].pack("N")
+              else
+                next
+              end
+        attstr += [attr, val.length + 2, val].pack(p_attr)
+      }
+
+      # Pack vendor-specific attributes
+      each_vsa { |vendor, attr, value|
+        vsattr_num = @dictionary.attr_num(attr, vendor)
+        vval = case @dictionary.attr_type(attr, vendor)
+               when "string" then value
+               when "integer"
+                 @dictionary.vsattr_has_val?(vendor, vsattr_num) && value.class == String ?
+                 [@dictionary.vsaval_convert(vendor, vsattr_num, value)].pack("N") :
+                   [value].pack("N")
+               when "ipaddr" then inet_aton(value)
+               when "time" then [value].pack("N")
+               else next
+               end
+        if vendor == 429
+          # For 3COM devices
+          attstr += [VSA_TYPE, vval.length + 10, vendor,
+            attr, vval].pack(p_vsa_3com)
+        else
+          attstr += [VSA_TYPE, vval.length + 8, vendor,
+            attr, vval.length + 2,
+            vval].pack(p_vsa)
+        end
+      }
+
+      case @code
+      when "Access-Request"
+        # According to RFC 2138:
+        # In Access-Request Packets, the Authenticator value is a 16 octet
+        # random number, called the Request Authenticator.  The value SHOULD
+        # be unpredictable and unique over the lifetime of a secret (the
+        # password shared between the client and the RADIUS server)
+
+        # get authenticator data from /dev/urandom if possible
+        if (File.exist?("/dev/urandom"))
+          File.open("/dev/urandom") { |urandom|
+            authenticator = urandom.read(16)
+          }
+        else
+          # use the Kernel:rand method.  This is quite probably not
+          # as secure as using /dev/urandom, be wary...
+          authenticator = [rand(65536), rand(65536), rand(65536),
+            rand(65536), rand(65536), rand(65536), rand(65536),
+            rand(65536)].pack("n8")
+        end
+
+      when "Accounting-Request"
+        # According to RFC 2866:
+        # In Accounting-Request Packets, the Authenticator value is a 16
+        # octet MD5 [5] checksum, called the Request Authenticator.
+
+        # The NAS and RADIUS accounting server share a secret.  The Request
+        # Authenticator field in Accounting-Request packets contains a one-
+        # way MD5 hash calculated over a stream of octets consisting of the
+        # Code + Identifier + Length + 16 zero octets + request attributes +
+        # shared secret (where + indicates concatenation).  The 16 octet MD5
+        # hash value is stored in the Authenticator field of the
+        # Accounting-Request packet.
+
+        # Note that the Request Authenticator of an Accounting-Request can
+        # not be done the same way as the Request Authenticator of a RADIUS
+        # Access-Request, because there is no User-Password attribute in an
+        # Accounting-Request.
+#puts [CODES[@code], @identifier, attstr.length + hdrlen, nil, attstr].pack(p_hdr).unpack('H*')
+        authenticator = Digest::MD5.digest([CODES[@code], @identifier, attstr.length + hdrlen,
+                        nil, attstr].pack(p_hdr))
+#puts authenticator.unpack('H*')
+      end
+
+      @data = [CODES[@code], @identifier, attstr.length + hdrlen,
+               authenticator, attstr].pack(p_hdr)
     end
 
     def set_attributes(*args)
-      args.each { |attr|
-        if !(attr.has_key?(:name) || attr.has_key?(:number))
-          raise ArgumentError, "Must supply :name or :number"
+      args.each { |item|
+        if !item.has_key?(:attr)
+          raise ArgumentError, "Must supply :attr"
         end
-        if !attr.has_key?(:value)
+        if !item.has_key?(:value)
           raise ArgumentError, "Must supply :value"
         end
-        if !attr.has_key?(:vendor)
-          attr[:vendor] = 0
+
+        # Default to the no-vendor number
+        if !item.has_key?(:vendor)
+          item[:vendor] = 0
         end
-        if attr[:vendor].class == String
-          attr[:vendor] = @dictionary.vendor_num(attr[:vendor])
+
+        # Look up the vendor's number
+        if item[:vendor].class == String
+          item[:vendor] = @dictionary.vendor_num(item[:vendor])
         end
-        if !attr.has_key?(:number)
-          attr[:number] = @dictionary.attr_num(attr[:name], attr[:vendor])
+
+        # Look up the attribute number
+        if item[:attr].class == String
+          item[:attr] = @dictionary.attr_num(item[:attr], item[:vendor])
         end
-        if (@attributes[attr[:vendor]].nil?)
-          @attributes[attr[:vendor]] = {}
+
+        # Initialize the vendor's place in the attribute hash
+        if (@attributes[item[:vendor]].nil?)
+          @attributes[item[:vendor]] = {}
         end
-        
-        @attributes[attr[:vendor]][attr[:number]] = attr[:value]
+
+        # Look up the value number for enumerated values
+        if (@dictionary.vsattr_has_val?(item[:attr], item[:vendor]))
+          item[:value] = @dictionary.vsaval_convert(item[:attr], item[:vendor], item[:value])
+        end
+
+        @attributes[item[:vendor]][item[:attr]] = item[:value]
       }
     end
 
@@ -241,20 +345,22 @@ module Radius
     end
 
     def to_s
-      content=""
+      content="-------- Radius::Packet --------\n"
       content+="Code: #{@code}\n"
       content+="Identifier: #{@identifier}\n"
-      content+="Length: #{@length}\n"
+      content+="Length: #{@length}\n" if @length
       #content+="Request Authenticator: #{@authenticator}\n"
       #content+="Response Authenticator: #{get_response_authenticator()}\n"
       @attributes.each_pair do |vendor_id, vattrs|
         vattrs.each_pair do |attribute,value|
-          attribute = @dictionary.get_attribute_name_by_id(vendor_id, attribute)
-          # TODO convert enumerated values back to strings
+          if @dictionary.vsattr_has_val?(attribute, vendor_id)
+            value = @dictionary.vsaval_convert(attribute, vendor_id, value)
+          end
+          attribute = @dictionary.attr_name(vendor_id, attribute)
           content+="#{attribute}: #{value}\n"
         end
       end
-      content
+      content+="\n"
     end
 
     # This method is provided a block which will pass every
@@ -302,8 +408,5 @@ module Radius
       set_attr("User-Password", pwdout)
       return(pwdout)
     end
-
   end
 end
-
-

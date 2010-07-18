@@ -26,7 +26,6 @@
 
 module Radius
   require 'lib/packet'
-  require 'lib/dictionary'
   require 'socket'
 
   class Auth
@@ -36,7 +35,7 @@ module Radius
     attr_reader :packet
 
     attr_reader :dictionary
- 
+
     # This method initializes the Auth object, given a dictionary
     # filename to read, the RADIUS host[:port] to connect to, and a
     # timeout value in seconds for the connection.
@@ -45,24 +44,13 @@ module Radius
     # +radhost+:: name of RADIUS server optionally followed by port number
     # +secret+:: RADIUS shared secret
     # +myip+:: the client's own IP address (NAS IP address)
-    # +timeout+:: Timeout time 
+    # +timeout+:: Timeout time
     def initialize(dictfilename, radhost, secret, myip, timeout = 5)
-      @dict = Radius::Dictionary.new
-      if dictfilename != nil
-        @dict.load(dictfilename)
-      end
-      @packet = Radius::Packet.new(@dict)
-      # this is probably better than starting identifiers at 0
-      @packet.identifier = Process.pid & 0xff
+      @dict = Radius::Dictionary.new(dictfilename)
       @myip = myip
-      @host, @port = radhost.split(":")
-      @port = Socket.getservbyname("radius", "udp") unless @port
-      @port = 1812 unless @port
-      @port = @port.to_i	# just in case
       @secret = secret
+      @radhost = radhost
       @timeout = timeout
-      @sock = UDPSocket.open
-      @sock.connect(@host, @port)
     end
 
     # Verifies a username/password pair against the RADIUS server
@@ -74,35 +62,76 @@ module Radius
     # =====Return value
     # returns true or false depending on whether or not the attempt succeeded or failed.
     def check_passwd(name, pwd = nil)
+      @packet = Radius::Packet.new(@dict, @secret, @radhost + ":1812")
+      # this is probably better than starting identifiers at 0
+      @packet.identifier = Kernel.rand(65535)
       @packet.code = 'Access-Request'
-      gen_authenticator
-      @packet.set_attributes({ :name => 'User-Name', :value => name })
-      @packet.set_attributes({ :name => 'NAS-IP-Address', :value => @myip })
+      @packet.set_attributes({ :attr => 'User-Name', :value => name })
+      @packet.set_attributes({ :attr => 'NAS-IP-Address', :value => @myip })
+      # FIXME: Need to abstract this somehow
+      @packet.set_attributes({ :attr => 'Calling-Station-Id', :value => "0014044754840" })
+      @packet.set_attributes({ :attr => 'Called-Station-Id', :value => "0014046955106" })
+      # END FIXME
       @packet.add_password(pwd, @secret) if !pwd.nil?
 puts @packet.to_s
-      send_packet
-      recv_packet
+      @sock = @packet.send
+      @packet = recv_packet
+      @sock.close
 puts @packet.to_s
+      # TODO: Validate the response authenticator
       return(@packet.code == 'Access-Accept')
     end
 
-    def get_accounting(name)
+    def start_accounting(name, session_id)
+      @packet = Radius::Packet.new(@dict, @secret, @radhost + ":1813")
+      # this is probably better than starting identifiers at 0
+      @packet.identifier = Kernel.rand(65535)
       @packet.code = 'Accounting-Request'
-      gen_authenticator
-      @packet.set_attributes({ :name => 'User-Name', :value => name })
-      @packet.set_attributes({ :name => 'NAS-IP-Address', :value => @myip })
+      @packet.set_attributes(
+        { :attr => 'User-Name', :value => name },
+        { :attr => 'NAS-IP-Address', :value => @myip },
+        { :attr => 'Acct-Session-Id', :value => session_id },
+        { :attr => 'Acct-Status-Type', :value => 'Start' },
+        { :attr => 'Acct-Authentic', :value => 'RADIUS' }
+      )
+      @packet.set_attributes({ :attr => 'Calling-Station-Id', :value => "0014044754840" })
+      @packet.set_attributes({ :attr => 'Called-Station-Id', :value => "0014046955106" })
 puts @packet.to_s
-      send_packet
-      recv_packet
+      @sock = @packet.send
+      @packet = recv_packet
+      @sock.close
 puts @packet.to_s
-      return(@packet.code == 'Access-Response')
+      # TODO: Validate the response authenticator
+      return(@packet.code == 'Accounting-Response')
+    end
+
+    def stop_accounting(name, session_id)
+      @packet = Radius::Packet.new(@dict, @secret, @radhost + ":1812")
+      # this is probably better than starting identifiers at 0
+      @packet.identifier = Kernel.rand(65535)
+      @packet.code = 'Accounting-Request'
+      @packet.set_attributes(
+        { :attr => 'User-Name', :value => name },
+        { :attr => 'NAS-IP-Address', :value => @myip },
+        { :attr => 'Acct-Session-Id', :value => session_id },
+        { :attr => 'Acct-Status-Type', :value => 'Stop' },
+        { :attr => 'Acct-Session-Time', :value => 0 },
+        { :attr => 'Acct-Terminate-Cause', :value => "User-Request" }
+      )
+puts @packet.to_s
+      @sock = @packet.send
+      @packet = recv_packet
+      @sock.close
+puts @packet.to_s
+      # TODO: Validate the response authenticator
+      return(@packet.code == 'Accounting-Response')
     end
 
     protected
     # Generate an authenticator, placing it in the @packet object's
     # authenticator attribute.  It will try to use /dev/urandom if
     # possible, or the system rand call if that's not available.
-    def gen_authenticator
+    def gen_auth_authenticator
       # get authenticator data from /dev/urandom if possible
        if (File.exist?("/dev/urandom"))
         File.open("/dev/urandom") { |urandom|
@@ -118,20 +147,13 @@ puts @packet.to_s
       return(@packet.authenticator)
     end
 
-    # Sends a packet to the server via UDP.
-    def send_packet
-      data = @packet.pack
-      @packet.identifier = (@packet.identifier + 1) & 0xff
-      @sock.send(data, 0)
-    end
-
     # Receive a packet from the server via UDP.
     def recv_packet
       if select([@sock], nil, nil, @timeout) == nil
-	raise "Timed out waiting for response packet from server"
+        raise "Timed out waiting for response packet from server"
       end
       data = @sock.recvfrom(65536)
-      @packet.unpack(data[0], @secret)
+      @packet = Radius::Packet.unpack(@dict, data[0], @secret)
       return(@packet)
     end
   end

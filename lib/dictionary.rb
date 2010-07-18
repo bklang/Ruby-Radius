@@ -7,9 +7,10 @@
 module Radius
 
   class Dictionary
-    def initialize
+    def initialize(dictionary_file)
       @dictionary = { 0 => { :name => "RFC" },
                       "RFC" => 0 }
+      load(dictionary_file)
     end
 
     def load(dictionary_file)
@@ -87,7 +88,7 @@ module Radius
           number = number.to_i
           type.strip!
           type.downcase!
-          vendor = get_vendor_name_by_id(vendor_id)
+          vendor = vendor_name(vendor_id)
 
           @dictionary[vendor_id][number] = {}
           @dictionary[vendor_id][number][:name] = name
@@ -95,7 +96,11 @@ module Radius
           @dictionary[vendor_id][name] = number
 
           if orphan_values.has_key?(number)
-            @dictionary[vendor_id][number][:values] = orphan_values.delete(number)
+            # Initialize the values if some do not already exist
+            if @dictionary[vendor_id][number][:values].nil?
+              @dictionary[vendor_id][number][:values] = {}
+            end
+            @dictionary[vendor_id][number][:values].merge!(orphan_values.delete(number))
           end
 
         when "VALUE"
@@ -112,14 +117,19 @@ module Radius
           value_id = value_id.to_i
           begin
             attr = attr_num(attr, vendor_id)
-            @dictionary[vendor_id][attr][:values] = {
+            if @dictionary[vendor_id][attr][:values].nil?
+              @dictionary[vendor_id][attr][:values] = {}
+            end
+            @dictionary[vendor_id][attr][:values].merge!({
               value_id => value_name,
               value_name => value_id
-            }
+            })
           rescue
             # The attribute must not have yet been defined.  Stash it for now
             # and add it when we eventually parse the attribute.
-            orphan_values[attr] = {}
+            if orphan_values[attr].nil?
+              orphan_values[attr] = {}
+            end
             orphan_values[attr][value_id] = value_name
             orphan_values[attr][value_name] = value_id
           end
@@ -130,7 +140,8 @@ module Radius
 
     end
 
-    def get_attribute_type_by_id(vendor_id, attribute_id)
+    def attr_type(vendor_id, attribute_id)
+      #FIXME: allow looking up by name
        if @dictionary[vendor_id]!=nil &&  @dictionary[vendor_id][attribute_id]!=nil
          @dictionary[vendor_id][attribute_id][:type]
        else
@@ -138,7 +149,7 @@ module Radius
        end
     end
 
-    def get_attribute_name_by_id(vendor_id,attribute_id)
+    def attr_name(vendor_id,attribute_id)
       if @dictionary[vendor_id]!=nil &&  @dictionary[vendor_id][attribute_id]!=nil
         @dictionary[vendor_id][attribute_id][:name]
       else
@@ -146,7 +157,7 @@ module Radius
       end
     end
 
-    def get_vendor_name_by_id(vendor_id)
+    def vendor_name(vendor_id)
       vendor_id = vendor_id.to_i
       if @dictionary[vendor_id]!=nil
         @dictionary[vendor_id][:name]
@@ -160,9 +171,9 @@ module Radius
     end
 
     def attr_num(attr, vendor = 0)
-      if vendor.class == "String"
+      if vendor.class == String
         # Look up the vendor ID by name
-        vendor = vendor_num(vendor) or raise "unknown vendor"
+        vendor = vendor_num(vendor)
       end
 
       raise "unknown attribute: #{attr}, #{vendor}" if @dictionary[vendor][attr].nil?
@@ -170,60 +181,68 @@ module Radius
     end
 
     def vendor_num(vendor)
+      @dictionary.has_key?(vendor) or raise "unknown vendor"
       @dictionary[vendor]
     end
 
     def attr_type(attr, vendor = 0)
-      if vendor.class == "String"
+      if vendor.class == String
         # Look up the vendor ID by name
         vendor = @dictionary[vendor] or raise "unknown vendor"
+      elsif !@dictionary.has_key?(vendor)
+        raise "Unknown vendor #{vendor}"
       end
 
-      if attr.class == "String"
+      if attr.class == String
         # Look up the attribute ID by name
         attr = attr_num(attr, vendor)
+      elsif !@dictionary[vendor].has_key?(attr)
+        puts "Warning: Unknown attribute #{attr} for vendor #{vendor}"
+        return "string"
       end
 
       @dictionary[vendor][attr][:type]
     end
 
     def attr_has_val?(attr)
-      vsattr_has_val(attr, 0)
+      vsattr_has_val?(attr, 0)
     end
 
-    def vsattr_has_val(attr, vendor = 0)
-      if vendor.class == "String"
+    def vsattr_has_val?(attr, vendor = 0)
+      if vendor.class == String
         # Look up the vendor ID by name
-        vendor = @dictionary[vendor] or raise "unknown vendor"
+        vendor = vendor_num(vendor)
+      elsif !@dictionary.has_key?(vendor)
+        raise ArgumentError, "Unknown vendor #{vendor}"
       end
 
-      if attr.class == "String"
+      if attr.class == String
         # Look up the attribute ID by name
         attr = attr_num(attr, vendor)
+      elsif !@dictionary[vendor].has_key?(attr)
+        raise ArgumentError, "Unknown attribute #{attr} for vendor #{vendor}"
       end
 
       @dictionary[vendor][attr].has_key?(:values)
     end
 
-    def val_num(attr, code)
-      vsaval_num(attr, 0, code)
+    def val_convert(attr, code)
+      vsaval_convert(attr, 0, code)
     end
 
-    def vsaval_num(attr, vendor, code)
-      if vendor.class == "String"
+    def vsaval_convert(attr, vendor, code)
+      if vendor.class == String
         # Look up the vendor ID by name
-        vendor = @dictionary[vendor] or raise "unknown vendor"
+        vendor = vendor_num(vendor)
       end
 
-      if attr.class == "String"
+      if attr.class == String
         # Look up the attribute ID by name
         attr = attr_num(attr, vendor)
       end
 
-      raise "Unknown code" if @dictionary[vendor][attr][:values][code].nil?
+      raise "Unknown value: Vendor #{vendor} Attr #{attr} Code #{code}" if @dictionary[vendor][attr][:values][code].nil?
       @dictionary[vendor][attr][:values][code]
     end
-
   end
-
 end
